@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional, List
 import os
 from dotenv import load_dotenv
+import requests
 
 # Load environment variables from .env file
 load_dotenv()
@@ -124,41 +125,65 @@ def get_summary_prompt(style: str) -> str:
     return prompts.get(style, prompts["bullet_points"])
 
 def summarize_chunk(chunk: str, api_key: str, temperature: float = 0.3, style: str = "bullet_points") -> str:
-    """Summarize a single text chunk using Gemini AI"""
+    """Summarize a single text chunk using OpenRouter DeepSeek"""
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
         prompt = f"{get_summary_prompt(style)}\n\n{chunk}"
-        
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                'temperature': temperature,
-                'max_output_tokens': 300
-            }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek/deepseek-r1-0528:free",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant that summarizes YouTube transcripts."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": 300
+        }
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
         )
-        return response.text.strip() if response and response.text else "Summary not available"
+        if response.status_code == 401:
+            return "[OpenRouter Error] 401 Unauthorized: Check your API key and model permissions."
+        response.raise_for_status()
+        result = response.json()
+        return result['choices'][0]['message']['content'].strip() if result.get('choices') else "Summary not available"
     except Exception as e:
         return f"Error generating summary: {str(e)}"
 
 def create_final_summary(chunk_summaries: List[str], api_key: str, temperature: float = 0.3) -> str:
-    """Create final cohesive summary from chunk summaries"""
+    """Create final cohesive summary from chunk summaries using OpenRouter DeepSeek"""
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
         combined_summaries = '\n'.join(chunk_summaries)
         prompt = f"Create a comprehensive 5-7 sentence summary of this video based on these section summaries:\n\n{combined_summaries}"
-        
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                'temperature': temperature,
-                'max_output_tokens': 400
-            }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek/deepseek-r1-0528:free",
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant that summarizes YouTube transcripts."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": 400
+        }
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=data,
+            timeout=60
         )
-        return response.text.strip() if response and response.text else "Final summary not available"
+        if response.status_code == 401:
+            return "[OpenRouter Error] 401 Unauthorized: Check your API key and model permissions."
+        response.raise_for_status()
+        result = response.json()
+        return result['choices'][0]['message']['content'].strip() if result.get('choices') else "Final summary not available"
     except Exception as e:
         return f"Error generating final summary: {str(e)}"
 
@@ -257,12 +282,12 @@ async def process_video_summary(
 ) -> SummaryResponse:
     """Process video summary with enhanced features"""
     start_time = time.time()
-    
-    # Use API key from environment if not provided
+    import os
+    # Use OpenRouter API key from environment if not provided
     if not api_key:
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            raise HTTPException(status_code=500, detail="Gemini API key not found in environment.")
+            raise HTTPException(status_code=500, detail="OpenRouter API key not found in environment.")
     
     try:
         # Extract video ID

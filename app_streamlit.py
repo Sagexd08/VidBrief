@@ -50,24 +50,42 @@ def get_html_download_link(text, filename="summary.html"):
 st.markdown(
     """
     <style>
-    body {
-        background: linear-gradient(135deg, #232526 0%, #414345 100%);
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+    html, body, .stApp {
+        font-family: 'Montserrat', sans-serif !important;
+        background: linear-gradient(135deg, #232526 0%, #414345 100%) !important;
         color: #f5f6fa;
     }
     .stApp {
         background: linear-gradient(135deg, #232526 0%, #414345 100%) !important;
     }
-    .stButton>button {
-        background-color: #ff4b2b;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        padding: 0.5em 1.5em;
-        font-weight: bold;
+    .main-card {
+        background: rgba(30, 30, 40, 0.85);
+        border-radius: 18px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        padding: 2.5em 2em 2em 2em;
+        margin-bottom: 2em;
+        border: 1.5px solid rgba(255,255,255,0.08);
     }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input {
-        background-color: #232526;
-        color: #f5f6fa;
+    .section-title {
+        font-size: 1.5em;
+        font-weight: 700;
+        color: #FFD700;
+        margin-bottom: 0.5em;
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+    }
+    .icon {
+        font-size: 1.2em;
+        margin-right: 0.3em;
+    }
+    .summary-section {
+        background: rgba(255,255,255,0.09);
+        border-radius: 12px;
+        padding: 1.5em;
+        margin-bottom: 1.5em;
+        box-shadow: 0 2px 8px 0 rgba(31, 38, 135, 0.10);
     }
     .chunk-summary {
         background: rgba(255,255,255,0.07);
@@ -82,18 +100,35 @@ st.markdown(
         color: #FFD700;
         margin-bottom: 0.5em;
     }
-    .summary-section {
-        background: rgba(255,255,255,0.09);
-        border-radius: 10px;
-        padding: 18px;
-        margin-bottom: 18px;
+    .divider {
+        border: none;
+        border-top: 2px solid #FFD70033;
+        margin: 2em 0 1.5em 0;
     }
-    .summary-actions {
-        margin-bottom: 1em;
+    .floating-feedback {
+        position: fixed;
+        bottom: 32px;
+        right: 32px;
+        z-index: 9999;
     }
-    .theme-toggle {
-        margin-top: 1em;
-        text-align: center;
+    .floating-feedback button {
+        background: linear-gradient(90deg, #ff4b2b 0%, #ff416c 100%);
+        color: #fff;
+        border: none;
+        border-radius: 50px;
+        padding: 0.8em 2em;
+        font-size: 1.1em;
+        font-weight: bold;
+        box-shadow: 0 4px 16px 0 rgba(255,75,43,0.15);
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .floating-feedback button:hover {
+        background: linear-gradient(90deg, #ff416c 0%, #ff4b2b 100%);
+    }
+    .stSpinner > div > div {
+        border-top-color: #FFD700 !important;
+        border-right-color: #FFD700 !important;
     }
     </style>
     """,
@@ -169,6 +204,7 @@ summarize_btn = st.button("🚀 Summarize", disabled=not api_online)
 selected_summary_style = 'detailed'
 
 if summarize_btn:
+    summary_error = False
     if not url:
         st.warning("Please provide the YouTube URL or ID.")
     else:
@@ -188,12 +224,22 @@ if summarize_btn:
                 progress.progress(50)
                 if response.status_code == 200:
                     data = response.json()
-                    # Save to history
-                    st.session_state['history'].insert(0, data)
-                    st.session_state['last_summary'] = data
-                    # Save transcript if available
-                    st.session_state['last_transcript'] = data.get('transcript', None)
-                    progress.progress(100)
+                    # Check for OpenRouter 401 or error in summary
+                    if (
+                        '[OpenRouter Error]' in data.get('summary', '') or
+                        '[OpenRouter Error]' in data.get('chunk_summaries', [''])[0] or
+                        '401 Unauthorized' in data.get('summary', '')
+                    ):
+                        st.error("OpenRouter API error: Unauthorized. Please check your OpenRouter API key, model permissions, or try a different model/key. See https://openrouter.ai/ for help.")
+                        progress.empty()
+                        summary_error = True
+                    if not summary_error:
+                        # Save to history
+                        st.session_state['history'].insert(0, data)
+                        st.session_state['last_summary'] = data
+                        # Save transcript if available
+                        st.session_state['last_transcript'] = data.get('transcript', None)
+                        progress.progress(100)
                 else:
                     try:
                         error = response.json().get('detail') or response.json().get('error', 'Unknown error')
@@ -238,7 +284,7 @@ if st.session_state['last_summary'] is not None:
         # Transcript viewer (simulate, as backend doesn't return transcript)
         if st.session_state['last_transcript']:
             with st.expander("Show Full Transcript"):
-                st.text_area("Transcript", st.session_state['last_transcript'], height=200)
+                st.text_area("Transcript", st.session_state['last_transcript'], height=200, key=f"expander_transcript_{video_id}")
                 st.download_button("📥 Download Transcript", st.session_state['last_transcript'], file_name="transcript.txt")
                 st.button("📋 Copy Transcript", on_click=lambda: st.session_state.update({'copy_transcript': st.session_state['last_transcript']}))
                 if st.session_state.get('copy_transcript'):
@@ -272,13 +318,14 @@ if st.session_state['last_summary'] is not None:
     with tabs[3]:
         transcript = st.session_state['last_transcript']
         if transcript:
-            st.text_area("Transcript", transcript, height=200)
+            st.text_area("Transcript", transcript, height=200, key=f"transcript_{video_id}")
         else:
             st.text_area(
                 "Transcript",
                 "Transcript not available for this video.\n\nPossible reasons:\n- The video may not have captions enabled.\n- The video is too new or restricted.\n- Try another video or check your backend logs.",
                 height=200,
-                disabled=True
+                disabled=True,
+                key=f"transcript_{video_id}_missing"
             )
 
 # --- Sidebar: About & Help ---
@@ -319,3 +366,12 @@ If you have suggestions or found a bug, please [open an issue](https://github.co
 """)
 st.text_area("Your feedback", "", key="feedback", height=80)
 st.button("Submit Feedback", on_click=lambda: st.success("Thank you for your feedback!"))
+
+# --- Floating Feedback Button ---
+st.markdown('''
+<div class="floating-feedback">
+    <button onclick="window.open('https://github.com/Sagexd08/youtube-summarizer/issues', '_blank')">
+        💬 Feedback
+    </button>
+</div>
+''', unsafe_allow_html=True)
