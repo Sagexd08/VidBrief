@@ -14,7 +14,9 @@ from nltk.tokenize import sent_tokenize
 from tqdm import tqdm
 
 # Configure APIs
-GEMINI_API_KEY = "AIzaSyBD1MCAu02mn3qv18D3eEhlbRmK2LG3rPU"
+from dotenv import load_dotenv
+load_dotenv()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 def extract_video_id(url_or_id):

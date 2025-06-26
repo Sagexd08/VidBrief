@@ -403,9 +403,9 @@ async def process_video_summary(
     start_time = time.time()
     # Use Gemini API key from environment if not provided
     if not api_key:
-        api_key = os.getenv("GEMINI_API_KEY") or "AIzaSyAUqtiM6OQJ8cDvH6SJ2nSS5w1ZKcKO8PA"
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise HTTPException(status_code=500, detail="Gemini API key not found in environment or fallback.")
+            raise HTTPException(status_code=500, detail="Gemini API key not found in environment.")
 
     try:
         # Extract video ID

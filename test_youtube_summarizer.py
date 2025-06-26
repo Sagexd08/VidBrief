@@ -123,8 +123,9 @@ def chunk_text(text, max_tokens=1000):
 
 def test_gemini_api():
     """Test Gemini API connection"""
-    # Use the provided API key
-    api_key = "AIzaSyBD1MCAu02mn3qv18D3eEhlbRmK2LG3rPU"
+    from dotenv import load_dotenv
+    load_dotenv()
+    api_key = os.environ.get("GEMINI_API_KEY")
     
     try:
         genai.configure(api_key=api_key)
