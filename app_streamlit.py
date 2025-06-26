@@ -5,6 +5,20 @@ import base64
 import time
 from streamlit.components.v1 import html
 
+# --- Session State Initialization (MUST be at the top) ---
+if 'history' not in st.session_state:
+    st.session_state['history'] = []
+if 'last_transcript' not in st.session_state:
+    st.session_state['last_transcript'] = None
+if 'last_summary' not in st.session_state:
+    st.session_state['last_summary'] = None
+if 'notes' not in st.session_state:
+    st.session_state['notes'] = {}
+if 'theme' not in st.session_state:
+    st.session_state['theme'] = 'dark'
+if 'feedback' not in st.session_state:
+    st.session_state['feedback'] = ''
+
 # --- Helper Functions ---
 def extract_video_id(url_or_id):
     patterns = [
@@ -111,8 +125,6 @@ with st.sidebar.expander('⚙️ Advanced Settings', expanded=True):
     summary_format = st.radio("Summary Format", ["Plain Text", "Markdown", "HTML"])
 
 # --- Theme Toggle with Visual Feedback ---
-if 'theme' not in st.session_state:
-    st.session_state['theme'] = 'dark'
 theme_icon = "🌙" if st.session_state['theme'] == 'dark' else "☀️"
 if st.sidebar.button(f"{theme_icon} Toggle Theme"):
     st.session_state['theme'] = 'light' if st.session_state['theme'] == 'dark' else 'dark'
@@ -129,12 +141,6 @@ if st.session_state['history']:
             st.markdown(f"<a href='{item.get('video_url', '#')}' target='_blank'>🔗 Open Video</a>", unsafe_allow_html=True)
             st.markdown(f"<span style='font-size:0.9em;'>Summary: {item.get('summary', '')[:60]}...</span>", unsafe_allow_html=True)
             st.markdown("---", unsafe_allow_html=True)
-
-# Session state for history and transcript
-if 'history' not in st.session_state:
-    st.session_state['history'] = []
-if 'last_transcript' not in st.session_state:
-    st.session_state['last_transcript'] = None
 
 # Backend health check (auto-refresh)
 def check_api_health():
@@ -200,7 +206,7 @@ if summarize_btn:
                 progress.empty()
 
 # --- Main Content Tabs ---
-if 'last_summary' in st.session_state:
+if st.session_state['last_summary'] is not None:
     data = st.session_state['last_summary']
     video_id = data.get("video_id", "")
     tabs = st.tabs(["Summary", "Word Cloud", "Notes", "Transcript"])
@@ -264,10 +270,16 @@ if 'last_summary' in st.session_state:
             st.info(f"Your note for this video: {st.session_state['notes'][video_id]}")
     # --- Transcript Tab ---
     with tabs[3]:
-        if st.session_state['last_transcript']:
-            st.text_area("Transcript", st.session_state['last_transcript'], height=200)
+        transcript = st.session_state['last_transcript']
+        if transcript:
+            st.text_area("Transcript", transcript, height=200)
         else:
-            st.info("Transcript not available for this video.")
+            st.text_area(
+                "Transcript",
+                "Transcript not available for this video.\n\nPossible reasons:\n- The video may not have captions enabled.\n- The video is too new or restricted.\n- Try another video or check your backend logs.",
+                height=200,
+                disabled=True
+            )
 
 # --- Sidebar: About & Help ---
 with st.sidebar.expander('ℹ️ About & Help', expanded=False):

@@ -83,10 +83,16 @@ def get_video_title(video_id: str) -> str:
         return f"Video {video_id}"
 
 def clean_transcript(transcript: list) -> str:
-    """Clean and format transcript text"""
+    """Clean and format transcript text (handles both dict and object types)"""
     if not transcript:
         return ''
-    text = ' '.join([seg['text'] for seg in transcript])
+    texts = []
+    for seg in transcript:
+        if isinstance(seg, dict):
+            texts.append(seg.get('text', ''))
+        else:
+            texts.append(getattr(seg, 'text', ''))
+    text = ' '.join(texts)
     text = re.sub(r'\[.*?\]', '', text)  # Remove [tags]
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
@@ -264,9 +270,35 @@ async def process_video_summary(
         if not video_id or len(video_id) != 11:
             raise HTTPException(status_code=400, detail="Invalid YouTube URL or video ID")
         
-        # Fetch transcript
+        # Fetch transcript (prefer Hindi, fallback to default)
         try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
+            from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+            transcript = None
+            try:
+                transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                # Try to get Hindi transcript
+                try:
+                    transcript = transcripts.find_transcript(['hi']).fetch()
+                except Exception:
+                    # Fallback to manually search for Hindi
+                    for t in transcripts:
+                        if t.language_code == 'hi':
+                            transcript = t.fetch()
+                            break
+                # Fallback to English or first available
+                if not transcript:
+                    try:
+                        transcript = transcripts.find_transcript(['en']).fetch()
+                    except Exception:
+                        transcript = transcripts.find_generated_transcript(['en']).fetch() if transcripts._generated_transcripts else None
+                # Fallback to first transcript
+                if not transcript:
+                    transcript = transcripts._manually_created_transcripts[0].fetch() if transcripts._manually_created_transcripts else None
+            except Exception:
+                # Fallback to old method
+                transcript = YouTubeTranscriptApi.get_transcript(video_id)
+            if not transcript:
+                raise HTTPException(status_code=404, detail="Transcript not available for this video (no Hindi or English transcript found)")
         except (TranscriptsDisabled, NoTranscriptFound):
             raise HTTPException(status_code=404, detail="Transcript not available for this video")
         except Exception as e:
