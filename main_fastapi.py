@@ -125,109 +125,228 @@ def get_summary_prompt(style: str) -> str:
     return prompts.get(style, prompts["bullet_points"])
 
 def summarize_chunk(chunk: str, api_key: str, temperature: float = 0.3, style: str = "bullet_points") -> str:
-    """Summarize a single text chunk using OpenRouter DeepSeek"""
+    """Summarize a single text chunk using Gemini 2.5 Flash (Google Generative AI)"""
     try:
         prompt = f"{get_summary_prompt(style)}\n\n{chunk}"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek/deepseek-r1-0528:free",
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant that summarizes YouTube transcripts."},
-                {"role": "user", "content": prompt}
-            ],
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        response = model.generate_content(prompt, generation_config={
             "temperature": temperature,
-            "max_tokens": 300
-        }
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-        if response.status_code == 401:
-            return "[OpenRouter Error] 401 Unauthorized: Check your API key and model permissions."
-        response.raise_for_status()
-        result = response.json()
-        return result['choices'][0]['message']['content'].strip() if result.get('choices') else "Summary not available"
+            "max_output_tokens": 300
+        })
+        if hasattr(response, 'text'):
+            return response.text.strip()
+        return str(response).strip()
     except Exception as e:
-        return f"Error generating summary: {str(e)}"
+        return f"[Gemini Error] {str(e)}"
 
 def create_final_summary(chunk_summaries: List[str], api_key: str, temperature: float = 0.3) -> str:
-    """Create final cohesive summary from chunk summaries using OpenRouter DeepSeek"""
+    """Create final cohesive summary from chunk summaries using Gemini 2.5 Flash (Google Generative AI)"""
     try:
         combined_summaries = '\n'.join(chunk_summaries)
         prompt = f"Create a comprehensive 5-7 sentence summary of this video based on these section summaries:\n\n{combined_summaries}"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek/deepseek-r1-0528:free",
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant that summarizes YouTube transcripts."},
-                {"role": "user", "content": prompt}
-            ],
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        response = model.generate_content(prompt, generation_config={
             "temperature": temperature,
-            "max_tokens": 400
-        }
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-        if response.status_code == 401:
-            return "[OpenRouter Error] 401 Unauthorized: Check your API key and model permissions."
-        response.raise_for_status()
-        result = response.json()
-        return result['choices'][0]['message']['content'].strip() if result.get('choices') else "Final summary not available"
+            "max_output_tokens": 400
+        })
+        if hasattr(response, 'text'):
+            return response.text.strip()
+        return str(response).strip()
     except Exception as e:
-        return f"Error generating final summary: {str(e)}"
+        return f"[Gemini Error] {str(e)}"
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint with API information"""
     html_content = """
     <!DOCTYPE html>
-    <html>
+    <html lang='en'>
     <head>
         <title>YouTube Summarizer API</title>
+        <meta charset='UTF-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+        <link rel='preconnect' href='https://fonts.googleapis.com'>
+        <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
+        <link href='https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Fira+Mono&display=swap' rel='stylesheet'>
+        <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css'>
         <style>
-            body { font-family: Arial, sans-serif; margin: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-            .container { max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; }
-            h1 { color: #fff; text-align: center; }
-            .endpoint { background: rgba(255,255,255,0.2); padding: 15px; margin: 10px 0; border-radius: 8px; }
-            .method { color: #4CAF50; font-weight: bold; }
-            a { color: #FFD700; text-decoration: none; }
-            a:hover { text-decoration: underline; }
+            body {
+                font-family: 'Roboto', Arial, sans-serif;
+                margin: 0;
+                min-height: 100vh;
+                background: linear-gradient(120deg, #f8fafc 0%, #e3e6ed 100%);
+                color: #23272f;
+            }
+            .llm-header {
+                background: linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%);
+                padding: 36px 0 24px 0;
+                border-bottom-left-radius: 32px;
+                border-bottom-right-radius: 32px;
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.10);
+                text-align: center;
+            }
+            .llm-header h1 {
+                font-size: 2.8rem;
+                font-weight: 700;
+                color: #fff;
+                margin: 0 0 0.2em 0;
+                letter-spacing: 1px;
+            }
+            .llm-header .subtitle {
+                color: #f8fafc;
+                font-size: 1.25rem;
+                margin-bottom: 0.5em;
+            }
+            .llm-header .llm-badge {
+                display: inline-block;
+                background: #fff;
+                color: #6a82fb;
+                font-weight: 700;
+                border-radius: 20px;
+                padding: 6px 18px;
+                font-size: 1em;
+                margin-top: 10px;
+                box-shadow: 0 2px 8px rgba(106,130,251,0.08);
+            }
+            .llm-main {
+                max-width: 900px;
+                margin: -40px auto 0 auto;
+                background: #fff;
+                border-radius: 24px;
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.10);
+                padding: 40px 36px 32px 36px;
+                position: relative;
+                z-index: 2;
+            }
+            .llm-cards {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 28px;
+                margin-bottom: 32px;
+                justify-content: space-between;
+            }
+            .llm-card {
+                flex: 1 1 260px;
+                min-width: 260px;
+                background: linear-gradient(120deg, #f8fafc 0%, #e3e6ed 100%);
+                border-radius: 18px;
+                box-shadow: 0 2px 8px rgba(31, 38, 135, 0.06);
+                padding: 28px 22px 22px 22px;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+                border-left: 6px solid #6a82fb;
+            }
+            .llm-card .icon {
+                font-size: 1.7em;
+                color: #fc5c7d;
+                margin-bottom: 8px;
+            }
+            .llm-card .title {
+                font-weight: 700;
+                font-size: 1.1em;
+                color: #23272f;
+            }
+            .llm-card .desc {
+                color: #6c757d;
+                font-size: 1em;
+            }
+            .llm-links {
+                text-align: center;
+                margin-top: 2em;
+            }
+            .llm-links a {
+                color: #6a82fb;
+                font-weight: 700;
+                text-decoration: none;
+                margin: 0 18px;
+                font-size: 1.1em;
+                transition: color 0.2s;
+            }
+            .llm-links a:hover {
+                color: #fc5c7d;
+                text-decoration: underline;
+            }
+            .llm-footer {
+                text-align: center;
+                color: #6c757d;
+                font-size: 1em;
+                margin-top: 3em;
+                padding-bottom: 1em;
+            }
+            .floating-feedback {
+                position: fixed;
+                bottom: 32px;
+                right: 32px;
+                z-index: 999;
+            }
+            .feedback-btn {
+                background: linear-gradient(90deg, #fc5c7d 0%, #6a82fb 100%);
+                color: #fff;
+                font-weight: bold;
+                border: none;
+                border-radius: 50px;
+                padding: 16px 32px;
+                font-size: 1.1em;
+                box-shadow: 0 4px 16px rgba(106,130,251, 0.18);
+                cursor: pointer;
+                transition: background 0.2s, box-shadow 0.2s;
+            }
+            .feedback-btn:hover {
+                background: linear-gradient(90deg, #6a82fb 0%, #fc5c7d 100%);
+                box-shadow: 0 6px 24px rgba(252,92,125, 0.18);
+            }
         </style>
     </head>
     <body>
-        <div class="container">
-            <h1>🎬 YouTube Video Summarizer API</h1>
-            <p>Advanced API for summarizing YouTube videos using AI technology.</p>
-            
-            <div class="endpoint">
-                <h3><span class="method">GET</span> /test/</h3>
-                <p>Test endpoint to verify API status</p>
+        <div class="llm-header">
+            <h1><i class="fa-brands fa-youtube"></i> YouTube Video Summarizer API</h1>
+            <div class="subtitle">Notebook LLM+ inspired UI for summarizing YouTube videos with <span style='color:#ffd700;'>Gemini 2.5 Flash</span>.</div>
+            <div class="llm-badge"><i class="fa-solid fa-bolt"></i> FastAPI & Gemini 2.5 Flash</div>
+        </div>
+        <div class="llm-main">
+            <div class="llm-cards">
+                <div class="llm-card">
+                    <span class="icon"><i class="fa-solid fa-vial"></i></span>
+                    <span class="title">GET /test/</span>
+                    <span class="desc">Test endpoint to verify API status</span>
+                </div>
+                <div class="llm-card">
+                    <span class="icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                    <span class="title">GET /summarize/</span>
+                    <span class="desc">Summarize a YouTube video<br><b>Parameters:</b> url, api_key, max_tokens, temperature, summary_style</span>
+                </div>
+                <div class="llm-card">
+                    <span class="icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                    <span class="title">POST /summarize/</span>
+                    <span class="desc">Summarize a YouTube video (JSON body)</span>
+                </div>
+                <div class="llm-card">
+                    <span class="icon"><i class="fa-solid fa-book"></i></span>
+                    <span class="title">GET /docs</span>
+                    <span class="desc">Interactive API Documentation</span>
+                </div>
+                <div class="llm-card">
+                    <span class="icon"><i class="fa-solid fa-heart-pulse"></i></span>
+                    <span class="title">GET /health/</span>
+                    <span class="desc">Health check endpoint</span>
+                </div>
             </div>
-            
-            <div class="endpoint">
-                <h3><span class="method">GET</span> /summarize/</h3>
-                <p>Summarize a YouTube video</p>
-                <p><strong>Parameters:</strong> url, api_key, max_tokens, temperature, summary_style</p>
+            <div class="llm-links">
+                <a href="/docs"><i class="fa-solid fa-book"></i> API Docs</a>
+                <a href="/test/"><i class="fa-solid fa-vial"></i> Test API</a>
+                <a href="/health/"><i class="fa-solid fa-heart-pulse"></i> Health</a>
             </div>
-            
-            <div class="endpoint">
-                <h3><span class="method">POST</span> /summarize/</h3>
-                <p>Summarize a YouTube video (JSON body)</p>
-            </div>
-            
-            <p><a href="/docs">📚 Interactive API Documentation</a></p>
-            <p><a href="/test/">🧪 Test API Status</a></p>
+        </div>
+        <div class="floating-feedback">
+            <button class="feedback-btn" onclick="window.open('https://forms.gle/2v8Qn6k8Qw6Qw6Qw6', '_blank')">
+                <i class="fa-solid fa-comment-dots"></i> Feedback
+            </button>
+        </div>
+        <div class="llm-footer">
+            <span>Made with <i class="fa-solid fa-heart" style="color:#fc5c7d;"></i> by <b>Your Team</b> &mdash; Powered by <b>Gemini 2.5 Flash</b></span>
         </div>
     </body>
     </html>
@@ -282,13 +401,12 @@ async def process_video_summary(
 ) -> SummaryResponse:
     """Process video summary with enhanced features"""
     start_time = time.time()
-    import os
-    # Use OpenRouter API key from environment if not provided
+    # Use Gemini API key from environment if not provided
     if not api_key:
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY") or "AIzaSyAUqtiM6OQJ8cDvH6SJ2nSS5w1ZKcKO8PA"
         if not api_key:
-            raise HTTPException(status_code=500, detail="OpenRouter API key not found in environment.")
-    
+            raise HTTPException(status_code=500, detail="Gemini API key not found in environment or fallback.")
+
     try:
         # Extract video ID
         video_id = extract_video_id(url)
@@ -342,7 +460,6 @@ async def process_video_summary(
         for chunk in chunks:
             summary = summarize_chunk(chunk, api_key, temperature, summary_style)
             chunk_summaries.append(summary)
-        
         # Create final summary
         final_summary = create_final_summary(chunk_summaries, api_key, temperature)
         
@@ -367,7 +484,6 @@ async def process_video_summary(
             processing_time=round(processing_time, 2),
             timestamp=datetime.now().isoformat()
         )
-        
     except HTTPException:
         raise
     except Exception as e:
